@@ -1,0 +1,24 @@
+version: "3"
+services:
+  timescale:
+    image: timescale/timescaledb:latest-pg14
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ${PWD}/data/timescale:/var/lib/postgresql/data
+
+  reductstore:
+    image: reduct/store:latest
+    ports:
+      - "8383:8383"
+    environment:
+      RS_API_TOKEN: reductstore
+      RS_BUCKET_1_NAME: benchmark
+      RS_BUCKET_1_QUTA_TYPE: FIFO
+      RS_BUCKET_1_QUOTA_SIZE: 50TB
+
+    volumes:
+      - ${PWD}/data/reductstore:/data
