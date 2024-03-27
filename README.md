@@ -1,30 +1,30 @@
-
-10 MB
-
-Write 990.0 Mb to TimescaleDB: 25.679052114486694 s
-Read 990.0 Mb from TimescaleDB: 5.967055797576904 s
-Write 990.0 Mb to ReductStore: 3.8605551719665527 s
-Read 990.0 Mb from ReductStore: 1.1499509811401367 s
+# Benchmarks for TimescaleDB and ReductStore in Python
 
 
-1 Mb
-Write 999.0 Mb to TimescaleDB: 28.525904893875122 s
-Read 999.0 Mb from TimescaleDB: 5.3227925300598145 s
-Write 999.0 Mb to ReductStore: 5.0503830909729 s
-Read 999.0 Mb from ReductStore: 0.8531465530395508 s
+The benchmarks write and read blobs of different sizes to TimescaleDB and ReductStore. 
+The benchmarks are written in Python and use the `psycopg2` and `reduct-py` libraries to interact with TimescaleDB and ReductStore,
+respectively.
 
 
-100Kb
+## Running
 
-Write 999.9 Mb to TimescaleDB: 70.99526238441467 s
-Read 999.9 Mb from TimescaleDB: 5.938082456588745 s
-Write 999.9 Mb to ReductStore: 11.402498245239258 s
-Read 999.9 Mb from ReductStore: 1.5953178405761719 s
+```
+pip install -r requirements.txt
+docker-compose up -d
+python main.py
+```
 
+## Results
 
-10Kb
-Chunk size=0.01 Mb, count=100000
-Write 999.99 Mb to TimescaleDB: 334.18847846984863 s
-Read 999.99 Mb from TimescaleDB: 7.560668230056763 s
-Write 999.99 Mb to ReductStore: 67.36447834968567 s
-Read 999.99 Mb from ReductStore: 12.104523658752441 s
+The script displays results for the specified `BLOB_SIZE` and `SIZE_COUNT`. On my device, which has an NVMe drive, here are the results I obtained:
+
+| Chunk Size | Operation | TimescaleDB, blob/s | ReductStore, blob/s |
+|------------|-----------|---------------------|---------------------|
+| 10 KB      | Write     | 1557                | 1500                |
+|            | Read      | 1333                | 1280                |
+| 100 KB     | Write     | 447                 | 1366                |
+|            | Read      | 353                 | 1120                |
+| 1 MB       | Write     | 53                  | 571                 |
+|            | Read      | 40                  | 382                 |
+| 10 Mb      | Write     | 5                   | 70                  |
+|            | Read      | 4                   | 38                  |
