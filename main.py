@@ -17,7 +17,7 @@ HOST = "localhost"
 CONNECTION = f"postgresql://postgres:postgres@{HOST}:5432"
 
 
-def setup_timescale_table():
+def setup_database():
     con = psycopg2.connect(CONNECTION)
     con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = con.cursor()
@@ -29,17 +29,15 @@ def setup_timescale_table():
 
 
 def write_to_timescale():
-    setup_timescale_table()
+    setup_database()
 
     with psycopg2.connect(CONNECTION + "/benchmark") as con:
         with con.cursor() as cur:
             cur.execute(
-                f"""
-                               CREATE TABLE data (
-                                   time TIMESTAMPTZ NOT NULL,
-                                   blob_data BYTEA NOT NULL
-                               );
-                               """
+                f"""CREATE TABLE data (
+                       time TIMESTAMPTZ NOT NULL,
+                       blob_data BYTEA NOT NULL);
+                """
             )
             cur.execute("SELECT create_hypertable('data', by_range('time'))")
             con.commit()
@@ -48,7 +46,10 @@ def write_to_timescale():
             for i in range(1, BLOB_COUNT):
                 cur.execute(
                     "INSERT INTO data (time, blob_data) VALUES (%s, %s);",
-                    (datetime.now(), psycopg2.Binary(CHUNK),),
+                    (
+                        datetime.now(),
+                        psycopg2.Binary(CHUNK),
+                    ),
                 )
                 count += BLOB_SIZE
 
@@ -74,7 +75,7 @@ def read_from_timescale(t1, t2):
 
 async def write_to_reduct():
     async with ReductClient(
-            f"http://{HOST}:8383", api_token="reductstore"
+        f"http://{HOST}:8383", api_token="reductstore"
     ) as reduct_client:
         count = 0
         bucket = await reduct_client.get_bucket("benchmark")
@@ -86,7 +87,7 @@ async def write_to_reduct():
 
 async def read_from_reduct(t1, t2):
     async with ReductClient(
-            f"http://{HOST}:8383", api_token="reductstore"
+        f"http://{HOST}:8383", api_token="reductstore"
     ) as reduct_client:
         count = 0
         bucket = await reduct_client.get_bucket("benchmark")
