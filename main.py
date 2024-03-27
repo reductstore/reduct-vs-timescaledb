@@ -31,48 +31,44 @@ def setup_timescale_table():
 def write_to_timescale():
     setup_timescale_table()
 
-    con = psycopg2.connect(CONNECTION + "/benchmark")
-    cur = con.cursor()
+    with psycopg2.connect(CONNECTION + "/benchmark") as con:
+        with con.cursor() as cur:
+            cur.execute(
+                f"""
+                               CREATE TABLE data (
+                                   time TIMESTAMPTZ NOT NULL,
+                                   blob_data BYTEA NOT NULL
+                               );
+                               """
+            )
+            cur.execute("SELECT create_hypertable('data', by_range('time'))")
+            con.commit()
 
-    cur.execute(
-        f"""
-                       CREATE TABLE data (
-                           time TIMESTAMPTZ NOT NULL,
-                           blob_data BYTEA NOT NULL
-                       );
-                       """
-    )
-    cur.execute("SELECT create_hypertable('data', by_range('time'))")
-    con.commit()
+            count = 0
+            for i in range(1, BLOB_COUNT):
+                cur.execute(
+                    "INSERT INTO data (time, blob_data) VALUES (%s, %s);",
+                    (datetime.now(), psycopg2.Binary(CHUNK),),
+                )
+                count += BLOB_SIZE
 
-    count = 0
-    for i in range(1, BLOB_COUNT):
-        cur.execute(
-            "INSERT INTO data (time, blob_data) VALUES (%s, %s);",
-            (datetime.now(), psycopg2.Binary(CHUNK),),
-        )
-        count += BLOB_SIZE
-
-    con.commit()
-    con.close()
     return count
 
 
 def read_from_timescale(t1, t2):
-    con = psycopg2.connect(CONNECTION + "/benchmark")
-    cur = con.cursor()
     count = 0
-    cur.execute(
-        "SELECT blob_data FROM data;",
-        (datetime.fromtimestamp(t1), datetime.fromtimestamp(t2)),
-    )
-    while True:
-        obj = cur.fetchone()
-        if obj is None:
-            break
+    with psycopg2.connect(CONNECTION + "/benchmark") as con:
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT blob_data FROM data WHERE time >= %s AND time < %s;",
+                (datetime.fromtimestamp(t1), datetime.fromtimestamp(t2)),
+            )
+            while True:
+                obj = cur.fetchone()
+                if obj is None:
+                    break
+                count += len(obj[0])
 
-        count += len(obj[0])
-    con.close()
     return count
 
 
