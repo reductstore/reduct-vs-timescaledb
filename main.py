@@ -8,48 +8,62 @@ import asyncio
 
 from reduct import Client as ReductClient
 
-BLOB_SIZE = 10_000
-BLOB_COUNT = 1_000_000_000 // BLOB_SIZE
+BLOB_SIZE = 100_000
+BLOB_COUNT = min(1000, 1_000_000_000 // BLOB_SIZE)
 
 CHUNK = random.randbytes(BLOB_SIZE)
 
-CONNECTION = "postgresql://postgres:postgres@localhost:5432"
+HOST = "localhost"
+CONNECTION = f"postgresql://postgres:postgres@{HOST}:5432"
 
 
-def write_to_timescale():
+def setup_timescale_table():
     con = psycopg2.connect(CONNECTION)
     con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = con.cursor()
-    cur.execute(f"DROP DATABASE IF EXISTS benchmark")
     cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;")
+    cur.execute(f"DROP DATABASE IF EXISTS benchmark")
+    cur.execute(f"CREATE DATABASE benchmark")
+    con.commit()
+    con.close()
+
+
+def write_to_timescale():
+    setup_timescale_table()
+
+    con = psycopg2.connect(CONNECTION + "/benchmark")
+    cur = con.cursor()
+
     cur.execute(
         f"""
-                       CREATE TABLE IF NOT EXISTS data (
+                       CREATE TABLE data (
                            time TIMESTAMPTZ NOT NULL,
-                           data BYTEA NOT NULL
+                           blob_data BYTEA NOT NULL
                        );
                        """
     )
+    cur.execute("SELECT create_hypertable('data', by_range('time'))")
     con.commit()
 
     count = 0
     for i in range(1, BLOB_COUNT):
         cur.execute(
-            "INSERT INTO data (time, data) VALUES (%s, %s);",
+            "INSERT INTO data (time, blob_data) VALUES (%s, %s);",
             (datetime.now(), psycopg2.Binary(CHUNK),),
         )
         count += BLOB_SIZE
 
+    con.commit()
     con.close()
     return count
 
 
 def read_from_timescale(t1, t2):
-    con = psycopg2.connect(CONNECTION)
+    con = psycopg2.connect(CONNECTION + "/benchmark")
     cur = con.cursor()
     count = 0
     cur.execute(
-        "SELECT data FROM data WHERE time > %s AND time < %s;",
+        "SELECT blob_data FROM data;",
         (datetime.fromtimestamp(t1), datetime.fromtimestamp(t2)),
     )
     while True:
@@ -64,7 +78,7 @@ def read_from_timescale(t1, t2):
 
 async def write_to_reduct():
     async with ReductClient(
-        "http://127.0.0.1:8383", api_token="reductstore"
+            f"http://{HOST}:8383", api_token="reductstore"
     ) as reduct_client:
         count = 0
         bucket = await reduct_client.get_bucket("benchmark")
@@ -76,11 +90,11 @@ async def write_to_reduct():
 
 async def read_from_reduct(t1, t2):
     async with ReductClient(
-        "http://127.0.0.1:8383", api_token="reductstore"
+            f"http://{HOST}:8383", api_token="reductstore"
     ) as reduct_client:
         count = 0
         bucket = await reduct_client.get_bucket("benchmark")
-        async for rec in bucket.query("data", t1, t2):
+        async for rec in bucket.query("data", t1, t2, ttl=90):
             count += len(await rec.read_all())
         return count
 
