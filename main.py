@@ -1,14 +1,19 @@
 from datetime import datetime
+from time import sleep
 
 import psycopg2
+import psycopg2.extras
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import random
 import time
 import asyncio
 
-from reduct import Client as ReductClient
+from reduct import Client as ReductClient, Batch
 
-BLOB_SIZE = 256000
+BLOB_SIZE = 1000_000
+BATCH_MAX_SIZE = 8_000_000
+BATCH_MAX_RECORDS = 80
+
 BLOB_COUNT = min(1000, 1_000_000_000 // BLOB_SIZE)
 
 CHUNK = random.randbytes(BLOB_SIZE)
@@ -43,15 +48,28 @@ def write_to_timescale():
             con.commit()
 
             count = 0
-            for i in range(1, BLOB_COUNT):
-                cur.execute(
-                    "INSERT INTO data (time, blob_data) VALUES (%s, %s);",
-                    (
-                        datetime.now(),
-                        psycopg2.Binary(CHUNK),
-                    ),
-                )
+            values = []
+            for i in range(0, BLOB_COUNT):
+                values.append((datetime.now(), psycopg2.Binary(CHUNK)))
+                sleep(0.000001)  # To avoid time collisions
                 count += BLOB_SIZE
+
+                if len(values) >= BATCH_MAX_RECORDS or len(values) * BLOB_SIZE >= BATCH_MAX_SIZE:
+                    psycopg2.extras.execute_values(
+                        cur,
+                        "INSERT INTO data (time, blob_data) VALUES %s;",
+                        values,
+                    )
+                    values = []
+
+
+            if len(values) > 0:
+                psycopg2.extras.execute_values(
+                    cur,
+                    "INSERT INTO data (time, blob_data) VALUES %s;",
+                    values,
+                )
+
 
     return count
 
@@ -79,9 +97,19 @@ async def write_to_reduct():
     ) as reduct_client:
         count = 0
         bucket = await reduct_client.get_bucket("benchmark")
-        for i in range(1, BLOB_COUNT):
-            await bucket.write("data", CHUNK)
+        batch = Batch()
+        for i in range(0, BLOB_COUNT):
+            batch.add(timestamp=datetime.now().timestamp(), data=CHUNK)
+            await asyncio.sleep(0.000001)  # To avoid time collisions
             count += BLOB_SIZE
+
+            if  batch.size >= BATCH_MAX_SIZE or len(batch) >= BATCH_MAX_RECORDS:
+                await bucket.write_batch("data", batch)
+                batch.clear()
+
+        if len(batch) > 0:
+            await bucket.write_batch("data", batch)
+
         return count
 
 
@@ -104,7 +132,7 @@ if __name__ == "__main__":
 
     ts_read = time.time()
     size = read_from_timescale(ts, time.time())
-    print(f"Read {size / 1000_000} Mb from TimescaleDB: {BLOB_COUNT / (time.time() - ts)} req/s")
+    print(f"Read {size / 1000_000} Mb from TimescaleDB: {BLOB_COUNT / (time.time() - ts_read)} req/s")
 
     loop = asyncio.new_event_loop()
     ts = time.time()
@@ -113,4 +141,4 @@ if __name__ == "__main__":
 
     ts_read = time.time()
     size = loop.run_until_complete(read_from_reduct(ts, time.time()))
-    print(f"Read {size / 1000_000} Mb from ReductStore: {BLOB_COUNT / (time.time() - ts)} req/s")
+    print(f"Read {size / 1000_000} Mb from ReductStore: {BLOB_COUNT / (time.time() - ts_read)} req/s")

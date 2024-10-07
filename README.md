@@ -20,11 +20,11 @@ The script displays results for the specified `BLOB_SIZE` and `SIZE_COUNT`. On m
 
 | Chunk Size | Operation | TimescaleDB, blob/s | ReductStore, blob/s |
 |------------|-----------|---------------------|---------------------|
-| 10 KB      | Write     | 1557                | 1500                |
-|            | Read      | 1333                | 1280                |
-| 100 KB     | Write     | 447                 | 1366                |
-|            | Read      | 353                 | 1120                |
-| 1 MB       | Write     | 53                  | 571                 |
-|            | Read      | 40                  | 382                 |
-| 10 Mb      | Write     | 5                   | 70                  |
-|            | Read      | 4                   | 38                  |
+| 1 KB       | Write     | 3124                | 9322                |
+|            | Read      | 40300               | 51505               |
+| 10 KB      | Write     | 2114                | 8395                |
+|            | Read      | 10241               | 42322               |
+| 100 KB     | Write     | 491                 | 5026                |
+|            | Read      | 1602                | 11244               |
+| 1 Mb       | Write     | 56                  | 898                 |
+|            | Read      | 173                 | 1336                |
